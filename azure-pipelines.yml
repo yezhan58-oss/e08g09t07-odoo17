@@ -31,6 +31,7 @@ stages:
         deploy:
           steps:
 
+          # Sync code
           - task: SSH@0
             displayName: "Sync Code - Staging"
             inputs:
@@ -39,17 +40,15 @@ stages:
               commands: |
                 set -e
                 echo "Deploying branch: $(Build.SourceBranchName)"
-
                 cd $(stagePath)
                 rm -rf deploy-temp *-odoo17
-
                 git clone -b Staging $(repoUrl) --quiet
                 mv *-odoo17 deploy-temp
-
                 cd deploy-temp
                 rm -f .DS_Store
                 rm -rf .github
 
+          # Run update script
           - task: SSH@0
             displayName: "Run Update Script - Staging"
             inputs:
@@ -58,7 +57,6 @@ stages:
               commands: |
                 echo "$(STAGINGUSERPASSWORD)" | sudo -S -p '' chmod +x $(updateScript)
                 echo "$(STAGINGUSERPASSWORD)" | sudo -S -p '' $(updateScript)
-
 
 # =========================
 # PRODUCTION STAGE
@@ -75,6 +73,7 @@ stages:
         deploy:
           steps:
 
+          # Sync code
           - task: SSH@0
             displayName: "Sync Code - Production"
             inputs:
@@ -83,61 +82,55 @@ stages:
               commands: |
                 set -e
                 echo "Deploying branch: $(Build.SourceBranchName)"
-
                 cd $(stagePath)
-                rm -rf deploy-temp *-odoo17
-
+                rm -rf deploy-temp odoo17
                 git clone -b master $(repoUrl) --quiet
-                mv *-odoo17 deploy-temp
-
+                mv odoo17 deploy-temp
                 cd deploy-temp
                 rm -f .DS_Store
                 rm -rf .github
-                
-        # --- Copy compressed SQL to VM ---
-        - task: CopyFilesOverSSH@0
-          displayName: "Upload odoo.sql.gz to VM"
-          inputs:
-            sshEndpoint: 'ssh-odoo17'
-            sourceFolder: '$(Agent.TempDirectory)'
-            contents: 'odoo.sql.gz'
-            targetFolder: '$(stagePath)/deploy-temp'
 
-        # --- Uncompress SQL on VM ---
-        - task: SSH@0
-          displayName: "Uncompress odoo.sql.gz on VM"
-          inputs:
-            sshEndpoint: 'ssh-odoo17'
-            runOptions: commands
-            commands: |
-              set -e
-              cd $(stagePath)/deploy-temp
-              echo "Uncompressing odoo.sql.gz..."
-              gunzip -c odoo.sql.gz > odoo.sql
-              echo "Uncompress complete: $(stagePath)/deploy-temp/odoo.sql"
+          # Upload compressed SQL
+          - task: CopyFilesOverSSH@0
+            displayName: "Upload odoo.sql.gz to VM"
+            inputs:
+              sshEndpoint: 'ssh-odoo17-production'
+              sourceFolder: '$(Agent.TempDirectory)'
+              contents: 'odoo.sql.gz'
+              targetFolder: '$(stagePath)/deploy-temp'
 
-        # --- Restore Database ---
-        - task: SSH@0
-          displayName: "Restore Database - Staging"
-          inputs:
-            sshEndpoint: 'ssh-odoo17'
-            runOptions: commands
-            commands: |
-              set -e
-              export PGPASSWORD=$(DB_PASSWORD)
-              cd $(stagePath)/deploy-temp
-        
-              echo "Dropping database if exists..."
-              psql -U $(dbUser) -d postgres -c "DROP DATABASE IF EXISTS $(dbName);"
-        
-              echo "Creating database..."
-              psql -U $(dbUser) -d postgres -c "CREATE DATABASE $(dbName) OWNER $(dbUser);"
-        
-              echo "Restoring database from uncompressed SQL..."
-              psql -U $(dbUser) -d $(dbName) -f odoo.sql
-        
-              echo "Database restore completed!"
+          # Uncompress SQL on VM
+          - task: SSH@0
+            displayName: "Uncompress odoo.sql.gz on VM"
+            inputs:
+              sshEndpoint: 'ssh-odoo17-production'
+              runOptions: commands
+              commands: |
+                set -e
+                cd $(stagePath)/deploy-temp
+                echo "Uncompressing odoo.sql.gz..."
+                gunzip -c odoo.sql.gz > odoo.sql
+                echo "Uncompress complete: $(stagePath)/deploy-temp/odoo.sql"
 
+          # Restore Database
+          - task: SSH@0
+            displayName: "Restore Database - Production"
+            inputs:
+              sshEndpoint: 'ssh-odoo17-production'
+              runOptions: commands
+              commands: |
+                set -e
+                export PGPASSWORD=$(DB_PASSWORD)
+                cd $(stagePath)/deploy-temp
+                echo "Dropping database if exists..."
+                psql -U $(dbUser) -d postgres -c "DROP DATABASE IF EXISTS $(dbName);"
+                echo "Creating database..."
+                psql -U $(dbUser) -d postgres -c "CREATE DATABASE $(dbName) OWNER $(dbUser);"
+                echo "Restoring database from uncompressed SQL..."
+                psql -U $(dbUser) -d $(dbName) -f odoo.sql
+                echo "Database restore completed!"
+
+          # Run update script
           - task: SSH@0
             displayName: "Run Update Script - Production"
             inputs:
