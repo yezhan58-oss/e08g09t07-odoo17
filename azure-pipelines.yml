@@ -8,7 +8,7 @@ pool:
   name: Default
 
 variables:
-  repoUrl: 'https://github.com/souravb-smu/odoo17.git'
+  repoUrl: 'https://github.com/yezhan58-oss/e08g09t07-odoo17.git'
   updateScript: '/home/is214/deploy-temp/update_code.sh'
   stagePath: '/home/is214/'
 
@@ -31,19 +31,21 @@ stages:
 
           # Sync code
           - task: SSH@0
-            displayName: "Sync Code - Staging"
+            displayName: "Sync Code"
             inputs:
               sshEndpoint: 'ssh-odoo17-staging'
               runOptions: commands
               commands: |
                 set -e
-                echo "Deploying branch: $(Build.SourceBranchName)"
-                cd $(stagePath)
-                rm -rf deploy-temp *-odoo17
-
-                git clone -b Staging $(repoUrl) --quiet
-                mv *-odoo17 deploy-temp
-
+                echo "Cleaning up temp folder..."
+                cd /home/is214/
+                # Delete old temp folder to ensure a clean clone
+                rm -rf deploy-temp
+                
+                echo "Cloning branch: $(Build.SourceBranchName)"
+                # We clone directly into 'deploy-temp' so we don't need 'mv'
+                git clone -b $(Build.SourceBranchName) $(repoUrl) deploy-temp --quiet
+                
                 cd deploy-temp
                 rm -f .DS_Store
                 rm -rf .github
@@ -76,22 +78,53 @@ stages:
 
           # Sync code
           - task: SSH@0
-            displayName: "Sync Code - Production"
+            displayName: "Sync Code"
             inputs:
               sshEndpoint: 'ssh-odoo17-prod'
               runOptions: commands
               commands: |
                 set -e
-                echo "Deploying branch: $(Build.SourceBranchName)"
-                cd $(stagePath)
-                rm -rf deploy-temp *-odoo17
-
-                git clone -b master $(repoUrl) --quiet
-                mv *-odoo17 deploy-temp
-
+                echo "Cleaning up temp folder..."
+                cd /home/is214/
+                # Delete old temp folder to ensure a clean clone
+                rm -rf deploy-temp
+                
+                echo "Cloning branch: $(Build.SourceBranchName)"
+                # We clone directly into 'deploy-temp' so we don't need 'mv'
+                git clone -b $(Build.SourceBranchName) $(repoUrl) deploy-temp --quiet
+                
                 cd deploy-temp
                 rm -f .DS_Store
                 rm -rf .github
+                
+          # Uncompress SQL on VM
+          - task: SSH@0
+            displayName: "Uncompress odoo.sql.gz on VM"
+            inputs:
+              sshEndpoint: 'ssh-odoo17-prod'
+              runOptions: commands
+              commands: |
+                set -e
+                cd /home/is214/deploy-temp/
+                echo "Uncompressing odoo.sql.gz..."
+                gunzip -c /home/is214/deploy-temp/odoo.sql.gz > /home/is214/deploy-temp/odoo.sql
+                echo "Uncompress complete: /home/is214/deploy-temp/odoo.sql"
+
+          # Restore Database
+          - task: SSH@0
+            displayName: "Restore Database"
+            inputs:
+              sshEndpoint: 'ssh-odoo17-prod'
+              runOptions: commands
+              commands: |
+                set -e
+                echo "$(STAGINGUSERPASSWORD)" | sudo -S -p '' cp /home/is214/deploy-temp/restore_db.sh /tmp/
+                echo "$(STAGINGUSERPASSWORD)" | sudo -S -p '' cp /home/is214/deploy-temp/odoo.sql /tmp/
+
+                echo "$(STAGINGUSERPASSWORD)" | sudo -S -p '' chmod +x /tmp/restore_db.sh
+                echo "$(STAGINGUSERPASSWORD)" | sudo -S -p '' chmod 644 /tmp/odoo.sql
+
+                echo "$(STAGINGUSERPASSWORD)" | sudo -S -p '' /tmp/restore_db.sh "odoo17" "odoo" "/tmp/odoo.sql"
 
           # Run update script
           - task: SSH@0
