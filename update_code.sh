@@ -22,3 +22,5 @@ echo "[4] Starting Odoo stack and rebuilding"
 sudo docker compose up -d --build 2>&1
 
 echo "Deployment finished successfully."
+
+# DEMO: Deployment triggered at 2026-03-28 16:35 SGT
