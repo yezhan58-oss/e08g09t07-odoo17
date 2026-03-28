@@ -31,19 +31,21 @@ stages:
 
           # Sync code
           - task: SSH@0
-            displayName: "Sync Code - Staging"
+            displayName: "Sync Code"
             inputs:
               sshEndpoint: 'ssh-odoo17-staging'
               runOptions: commands
               commands: |
                 set -e
-                echo "Deploying branch: $(Build.SourceBranchName)"
-                cd $(stagePath)
-                rm -rf deploy-temp *-odoo17
-
-                git clone -b Staging $(repoUrl) --quiet
-                mv *-odoo17 deploy-temp
-
+                echo "Cleaning up temp folder..."
+                cd /home/is214/
+                # Delete old temp folder to ensure a clean clone
+                rm -rf deploy-temp
+                
+                echo "Cloning branch: $(Build.SourceBranchName)"
+                # We clone directly into 'deploy-temp' so we don't need 'mv'
+                git clone -b $(Build.SourceBranchName) $(repoUrl) deploy-temp --quiet
+                
                 cd deploy-temp
                 rm -f .DS_Store
                 rm -rf .github
@@ -76,23 +78,25 @@ stages:
 
           # Sync code
           - task: SSH@0
-            displayName: "Sync Code - Production"
+            displayName: "Sync Code"
             inputs:
               sshEndpoint: 'ssh-odoo17-prod'
               runOptions: commands
               commands: |
                 set -e
-                echo "Deploying branch: $(Build.SourceBranchName)"
-                cd $(stagePath)
-                rm -rf deploy-temp *-odoo17
-
-                git clone -b master $(repoUrl) --quiet
-                mv *-odoo17 deploy-temp
-
+                echo "Cleaning up temp folder..."
+                cd /home/is214/
+                # Delete old temp folder to ensure a clean clone
+                rm -rf deploy-temp
+                
+                echo "Cloning branch: $(Build.SourceBranchName)"
+                # We clone directly into 'deploy-temp' so we don't need 'mv'
+                git clone -b $(Build.SourceBranchName) $(repoUrl) deploy-temp --quiet
+                
                 cd deploy-temp
                 rm -f .DS_Store
                 rm -rf .github
-
+                
           # Uncompress SQL on VM
           - task: SSH@0
             displayName: "Uncompress odoo.sql.gz on VM"
