@@ -1,33 +1,29 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-OD_SERVICE="odoo17"
-LIVE_DIR="/opt/odoo17/odoo17"
+# --- CONFIGURATION (Change these if your paths are different) ---
+DOCKER_PROJECT_DIR="/home/is214/odoo" 
 TEMP_DIR="/home/is214/deploy-temp"
-VENV_DIR="/opt/odoo17/odoo17-venv"
-ODOO_USER="odoo17"
 
-echo "[1] Stop Odoo"
-sudo systemctl stop ${OD_SERVICE}
+# This folder must match the volume mapping in your docker-compose.yml
+# Usually it is a folder named 'addons' in your project directory
+LIVE_ADDONS_DIR="${DOCKER_PROJECT_DIR}/addons"
 
-echo "[2] Copy updated code (no delete, safe merge)"
-sudo cp -rT --no-preserve=ownership "${TEMP_DIR}/" "${LIVE_DIR}/"
+echo "[1] Moving to project directory"
+cd "${DOCKER_PROJECT_DIR}"
 
-echo "[3] Install updated requirements (if exists)"
-if [ -f "${LIVE_DIR}/requirements.txt" ]; then
-    sudo -u ${ODOO_USER} bash -lc "
-        source ${VENV_DIR}/bin/activate &&
-        pip install --upgrade pip -q --disable-pip-version-check &&
-        pip install -r ${LIVE_DIR}/requirements.txt \
-            --upgrade --upgrade-strategy only-if-needed \
-            --disable-pip-version-check -q
-    "
-fi
+echo "[2] Stopping Odoo services"
+# This stops all containers in the stack (Odoo, DB, Nginx, etc.)
+sudo docker-compose down
 
-echo "[4] Fix file ownership"
-sudo chown -R ${ODOO_USER}:${ODOO_USER} ${LIVE_DIR}
+echo "[3] Syncing new code from Azure DevOps"
+# Ensure the addons folder exists
+sudo mkdir -p "${LIVE_ADDONS_DIR}"
+# Copy the code we just pulled from GitHub into the Docker volume folder
+sudo cp -rT --no-preserve=ownership "${TEMP_DIR}/" "${LIVE_ADDONS_DIR}/"
 
-echo "[5] Start Odoo"
-sudo systemctl start ${OD_SERVICE}
+echo "[4] Restarting all services"
+# --build ensures that if you added new python requirements, they get installed
+sudo docker-compose up -d --build
 
-echo "Deployment complete."
+echo "Deployment complete. Containers are spinning back up."
