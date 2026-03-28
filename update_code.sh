@@ -13,7 +13,7 @@ cd "${DOCKER_PROJECT_DIR}"
 
 echo "[2] Shutting down Odoo Stack"
 # This stops Odoo, Nginx, Postgres, and the monitoring tools
-sudo docker-compose down
+sudo docker compose down
 
 echo "[3] Syncing new code from Azure DevOps"
 # Ensure the addons directory exists on the host
@@ -26,7 +26,7 @@ sudo cp -rT --no-preserve=ownership "${TEMP_DIR}/" "${LIVE_ADDONS_DIR}/"
 echo "[4] Restarting Stack with Build"
 # --build is important because your Odoo nodes use 'build: context: .'
 # This will trigger a re-build of the Odoo image if your Dockerfile changed.
-sudo docker-compose up -d --build
+sudo docker compose up -d --build
 
 echo "Deployment complete. Checking status..."
-sudo docker-compose ps
+sudo docker compose ps
